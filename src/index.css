@@ -1,0 +1,130 @@
+/* ==========================================================================
+   DESIGN TOKENS & SYSTEM BASE STYLES
+   ========================================================================== */
+
+:root {
+  /* Color Palette */
+  --bg-dark: #0b0f19;
+  --bg-surface: #111827;
+  --bg-card: rgba(17, 24, 39, 0.65);
+  --bg-card-hover: rgba(30, 41, 59, 0.85);
+  --bg-glass: rgba(255, 255, 255, 0.03);
+
+  /* Borders & Highlights */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(139, 92, 246, 0.35);
+  --border-cyan: rgba(6, 182, 212, 0.35);
+
+  /* Primary Brand Accents */
+  --accent-purple: #8b5cf6;
+  --accent-purple-light: #a855f7;
+  --accent-cyan: #06b6d4;
+  --accent-emerald: #10b981;
+  --accent-pink: #ec4899;
+
+  /* Text Colors */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Typography */
+  --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Transitions & Shadows */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-glow-purple: 0 0 35px -5px rgba(139, 92, 246, 0.3);
+  --shadow-glow-cyan: 0 0 35px -5px rgba(6, 182, 212, 0.3);
+}
+
+/* Global Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-purple);
+}
+
+/* Keyframe Animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes floatAnim {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hero CursorGrid Positioning Fix */
+.hero-section {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-cursor-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+}
+
+.hero-content,
+.hero-visual {
+  position: relative;
+  z-index: 1;
+}
