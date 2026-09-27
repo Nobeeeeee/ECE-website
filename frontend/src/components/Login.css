@@ -1,0 +1,321 @@
+/* ==========================================================================
+   LOGIN OVERLAY & MODAL STYLES
+   ========================================================================== */
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(11, 15, 25, 0.85);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-modal {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 440px;
+  background: rgba(17, 24, 39, 0.9);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(139, 92, 246, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.login-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ffffff;
+}
+
+/* Header */
+.login-header {
+  text-align: center;
+}
+
+.login-logo-badge {
+  font-size: 2.5rem;
+  margin-bottom: 6px;
+  display: inline-block;
+  animation: floatAnim 4s ease-in-out infinite;
+}
+
+.login-header h2 {
+  font-family: var(--font-heading);
+  font-size: 1.8rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 40%, var(--accent-purple-light));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 4px;
+}
+
+.login-subtitle {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+/* Sign In / Create Account Toggle Bar */
+.auth-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: rgba(11, 15, 25, 0.8);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.auth-mode-switch button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px 0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.auth-mode-switch button.active {
+  background: rgba(139, 92, 246, 0.25);
+  color: #ffffff;
+  border: 1px solid rgba(139, 92, 246, 0.5);
+}
+
+/* Role Switcher Tabs */
+.login-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: rgba(11, 15, 25, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.login-tabs button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px 4px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.login-tabs button:hover {
+  color: var(--text-primary);
+}
+
+.login-tabs button.active {
+  background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
+/* Form Controls */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(11, 15, 25, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 0 14px;
+  transition: var(--transition-normal);
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--accent-purple-light);
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+}
+
+.input-icon {
+  font-size: 1rem;
+  margin-right: 10px;
+  opacity: 0.7;
+}
+
+.input-wrapper input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  padding: 10px 0;
+}
+
+.toggle-password {
+  background: transparent;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.7;
+  transition: var(--transition-fast);
+}
+
+.toggle-password:hover {
+  opacity: 1;
+}
+
+.login-submit-btn {
+  margin-top: 6px;
+  width: 100%;
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-purple-light));
+  color: #ffffff;
+  border: none;
+  padding: 13px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-glow-purple);
+  transition: var(--transition-normal);
+}
+
+.login-submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(139, 92, 246, 0.5);
+}
+
+.login-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Errors & Footer */
+.login-error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.login-footer-register {
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.login-footer-register button {
+  background: transparent;
+  border: none;
+  color: var(--accent-purple-light);
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: 4px;
+
+  transition: var(--transition-fast);
+}
+
+.login-footer-register button:hover {
+  color: var(--accent-cyan);
+}
+
+.login-footer-hint {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   RESPONSIVE DESIGN FOR LOGIN & AUTH MODAL
+   -------------------------------------------------------------------------- */
+@media (max-width: 576px) {
+  .login-overlay {
+    padding: 12px;
+  }
+
+  .login-modal {
+    padding: 24px 16px;
+    border-radius: 20px;
+    max-width: 100%;
+    gap: 14px;
+  }
+
+  .login-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .login-logo-badge {
+    font-size: 2.2rem;
+  }
+
+  .login-tabs button {
+    font-size: 0.75rem;
+    padding: 6px 2px;
+  }
+
+  .input-wrapper {
+    padding: 0 10px;
+  }
+
+  .input-wrapper input {
+    font-size: 0.88rem;
+    padding: 8px 0;
+  }
+
+  .login-submit-btn {
+    padding: 11px;
+    font-size: 0.92rem;
+  }
+}
