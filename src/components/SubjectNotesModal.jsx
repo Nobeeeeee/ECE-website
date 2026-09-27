@@ -193,11 +193,14 @@ export default function SubjectNotesModal({
 
   const subjectAssignments = !currentUser
     ? []
-    : customAssignmentsState.filter(
-        (a) =>
-          a.subjectId === subject.id ||
-          a.subjectName?.toLowerCase() === subject.name.toLowerCase()
-      );
+    : customAssignmentsState.filter((a) => {
+        if (a.subjectId === subject.id) return true;
+        const normModalName = (subject.name || "").trim().toLowerCase();
+        const normModalCode = (subject.code || "").trim().toLowerCase();
+        if (normModalName && a.subjectName?.trim().toLowerCase() === normModalName) return true;
+        if (normModalCode && a.subjectCode?.trim().toLowerCase() === normModalCode) return true;
+        return false;
+      });
 
   // Filter notes & files by active view mode (All, Question Bank, PDF Documents)
   const customNotes =

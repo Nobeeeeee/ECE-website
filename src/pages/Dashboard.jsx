@@ -141,7 +141,14 @@ function Dashboard() {
   useEffect(() => {
     const unsub = subscribeSubjects((fsSubs) => {
       if (fsSubs && fsSubs.length > 0) {
-        setSubjects(sanitizeSubjects(fsSubs));
+        setSubjects((prev) => {
+          const map = new Map();
+          fsSubs.forEach((s) => map.set(s.id, s));
+          prev.forEach((s) => {
+            if (!map.has(s.id)) map.set(s.id, s);
+          });
+          return sanitizeSubjects(Array.from(map.values()));
+        });
       } else {
         INITIAL_SUBJECTS.forEach((sub) => saveSubjectToFirestore(sub));
       }
@@ -343,13 +350,16 @@ function Dashboard() {
     };
   }, []);
 
-  const getSubjectAssignmentCount = (subjectId, subjectName) => {
+  const getSubjectAssignmentCount = (subjectId, subjectName, subjectCode) => {
     if (!currentUser) return 0;
-    return customAssignments.filter(
-      (a) =>
-        a.subjectId === subjectId ||
-        a.subjectName?.toLowerCase() === subjectName?.toLowerCase()
-    ).length;
+    const normName = (subjectName || "").trim().toLowerCase();
+    const normCode = (subjectCode || "").trim().toLowerCase();
+    return customAssignments.filter((a) => {
+      if (a.subjectId === subjectId) return true;
+      if (normName && a.subjectName?.trim().toLowerCase() === normName) return true;
+      if (normCode && a.subjectCode?.trim().toLowerCase() === normCode) return true;
+      return false;
+    }).length;
   };
 
   // Track student's recently viewed subjects
