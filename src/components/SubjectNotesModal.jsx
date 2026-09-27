@@ -58,6 +58,7 @@ export default function SubjectNotesModal({
   initialMode = "all",
   onUpdateNotes,
   onUpdateFiles,
+  onUpdateAssignments,
 }) {
   const [viewMode, setViewMode] = useState(initialMode);
   const [smartPreviewItem, setSmartPreviewItem] = useState(null);
@@ -119,7 +120,9 @@ export default function SubjectNotesModal({
           const mergedMap = new Map();
           prev.forEach((a) => mergedMap.set(a.id, a));
           fsAssigns.forEach((a) => mergedMap.set(a.id, a));
-          return Array.from(mergedMap.values());
+          const list = Array.from(mergedMap.values());
+          if (onUpdateAssignments) onUpdateAssignments(list);
+          return list;
         });
       }
     });
@@ -404,6 +407,7 @@ export default function SubjectNotesModal({
     const updated = [newAssignment, ...customAssignmentsState];
     localStorage.setItem("studynotes_custom_assignments", JSON.stringify(updated));
     setCustomAssignmentsState(updated);
+    if (onUpdateAssignments) onUpdateAssignments(updated);
     setShowCreateAssignmentModal(false);
     setAssignTitle("");
     setAssignDesc("");
@@ -420,6 +424,7 @@ export default function SubjectNotesModal({
       const updatedAssigns = customAssignmentsState.filter((a) => a.id !== assignId);
       localStorage.setItem("studynotes_custom_assignments", JSON.stringify(updatedAssigns));
       setCustomAssignmentsState(updatedAssigns);
+      if (onUpdateAssignments) onUpdateAssignments(updatedAssigns);
 
       const updatedSubs = customSubmissionsState.filter((s) => s.assignmentId !== assignId);
       localStorage.setItem("studynotes_custom_submissions", JSON.stringify(updatedSubs));

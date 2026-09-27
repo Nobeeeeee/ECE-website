@@ -7,6 +7,7 @@ import SmartExpandedPreviewModal from "../components/SmartExpandedPreviewModal";
 import { autoTranslateToTamil } from "../utils/tamilTranslator";
 import {
   subscribeSubjects,
+  subscribeAllAssignments,
   saveSubjectToFirestore,
   deleteSubjectFromFirestore,
   createOrUpdateFacultyInFirestore,
@@ -323,6 +324,24 @@ function Dashboard() {
       console.error("Failed to save custom assignments to localStorage", e);
     }
   }, [customAssignments]);
+
+  // Real-time Firestore Assignments Listener across all devices
+  useEffect(() => {
+    const unsub = subscribeAllAssignments((fsAssigns) => {
+      if (fsAssigns && fsAssigns.length > 0) {
+        setCustomAssignments((prev) => {
+          const map = new Map();
+          prev.forEach((a) => map.set(a.id, a));
+          fsAssigns.forEach((a) => map.set(a.id, a));
+          return Array.from(map.values());
+        });
+      }
+    });
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, []);
 
   const getSubjectAssignmentCount = (subjectId, subjectName) => {
     if (!currentUser) return 0;
@@ -1366,6 +1385,7 @@ function Dashboard() {
           navigate={navigate}
           onUpdateNotes={setCustomNotes}
           onUpdateFiles={setCustomFiles}
+          onUpdateAssignments={setCustomAssignments}
         />
       )}
 

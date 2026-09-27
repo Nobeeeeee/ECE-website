@@ -82,6 +82,22 @@ export const deleteFileFromFirestore = async (fileId) => {
 // ==========================================
 // 2. ASSIGNMENTS FIRESTORE SERVICE (Faculty)
 // ==========================================
+export const subscribeAllAssignments = (callback) => {
+  try {
+    const q = collection(db, "assignments");
+    return onSnapshot(q, (snapshot) => {
+      const assigns = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
+      callback(assigns);
+    }, (error) => {
+      console.warn("Firestore all assignments subscription warning:", error.message);
+      callback([]);
+    });
+  } catch (err) {
+    console.warn("Firestore all assignments init error:", err.message);
+    return () => {};
+  }
+};
+
 export const subscribeAssignments = (subjectId, callback) => {
   try {
     const q = query(
@@ -89,7 +105,7 @@ export const subscribeAssignments = (subjectId, callback) => {
       where("subjectId", "==", subjectId)
     );
     return onSnapshot(q, (snapshot) => {
-      const assigns = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const assigns = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
       callback(assigns);
     }, (error) => {
       console.warn("Firestore assignments subscription warning:", error.message);
@@ -103,11 +119,14 @@ export const subscribeAssignments = (subjectId, callback) => {
 
 export const createAssignmentInFirestore = async (assignmentData) => {
   try {
-    const docRef = await addDoc(collection(db, "assignments"), {
+    const docId = assignmentData.id || `assignment_${Date.now()}`;
+    const assignRef = doc(db, "assignments", docId);
+    await setDoc(assignRef, {
       ...assignmentData,
+      id: docId,
       createdAt: serverTimestamp(),
-    });
-    return docRef.id;
+    }, { merge: true });
+    return docId;
   } catch (err) {
     console.error("Failed to create assignment in Firestore:", err);
     throw err;
