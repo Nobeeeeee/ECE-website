@@ -13,12 +13,14 @@ import {
   collection, 
   getDocs 
 } from "firebase/firestore";
+import { subscribeSubjects, subscribeUsers } from "../services/firestoreService";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]);
+  const [firestoreSubjects, setFirestoreSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Clear legacy local storage login data on mount
@@ -29,6 +31,26 @@ export function AuthProvider({ children }) {
     } catch (e) {
       console.warn("Could not clear legacy users from localStorage", e);
     }
+  }, []);
+
+  // Subscribe to real-time users and subjects from Firestore
+  useEffect(() => {
+    const unsubUsers = subscribeUsers((fsUsers) => {
+      if (fsUsers && fsUsers.length > 0) {
+        setUsers(fsUsers);
+      }
+    });
+
+    const unsubSubjects = subscribeSubjects((fsSubs) => {
+      if (fsSubs && fsSubs.length > 0) {
+        setFirestoreSubjects(fsSubs);
+      }
+    });
+
+    return () => {
+      if (unsubUsers) unsubUsers();
+      if (unsubSubjects) unsubSubjects();
+    };
   }, []);
 
   // Listen to real-time Firebase Auth state changes
@@ -133,13 +155,24 @@ export function AuthProvider({ children }) {
 
     // 1. FACULTY LOGIN STRUCTURE (Admin sets subject & password, Faculty logs in with Admin-given password)
     if (role === "faculty") {
-      let savedSubjects = [];
-      try {
-        const rawSubs = localStorage.getItem("studynotes_subjects");
-        savedSubjects = rawSubs ? JSON.parse(rawSubs) : [];
-      } catch (e) {
-        savedSubjects = [];
+      let savedSubjects = firestoreSubjects.length > 0 ? firestoreSubjects : [];
+      if (savedSubjects.length === 0) {
+        try {
+          const rawSubs = localStorage.getItem("studynotes_subjects");
+          savedSubjects = rawSubs ? JSON.parse(rawSubs) : [];
+        } catch (e) {
+          savedSubjects = [];
+        }
       }
+
+      // Find matching faculty profile from Firestore users list
+      const matchingFacultyUser = users.find(
+        (u) =>
+          u.role === "faculty" &&
+          ((u.name && cleanId && u.name.toLowerCase() === cleanId.toLowerCase()) ||
+           (u.identifier && cleanId && u.identifier.toLowerCase() === cleanId.toLowerCase()) ||
+           (u.subjectCode && cleanCode && u.subjectCode.toLowerCase() === cleanCode.toLowerCase()))
+      );
 
       // Find matching subject assigned by Admin
       const matchingSub = savedSubjects.find(
@@ -153,14 +186,14 @@ export function AuthProvider({ children }) {
       const teacherName =
         matchingSub && matchingSub.assignedTeacher && matchingSub.assignedTeacher !== "Unassigned"
           ? matchingSub.assignedTeacher
-          : cleanId || matchingSub?.name || "Faculty Teacher";
+          : matchingFacultyUser?.name || cleanId || matchingSub?.name || "Faculty Teacher";
 
-      const subCode = matchingSub?.code || cleanCode || "EC8701";
-      const subName = matchingSub?.name || cleanId || "ECE Course";
-      const expectedPassword = matchingSub?.facultyPassword || "faculty123";
+      const subCode = matchingSub?.code || matchingFacultyUser?.subjectCode || cleanCode || "EC8701";
+      const subName = matchingSub?.name || matchingFacultyUser?.subjectName || cleanId || "ECE Course";
+      const expectedPassword = matchingSub?.facultyPassword || matchingFacultyUser?.facultyPassword || "faculty123";
 
       // Verify Admin-assigned password
-      if (matchingSub && matchingSub.facultyPassword && password !== matchingSub.facultyPassword) {
+      if (expectedPassword && password !== expectedPassword) {
         throw new Error(`Incorrect Faculty password for ${subName}. Please enter the password set by Administrator.`);
       }
 

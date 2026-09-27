@@ -209,3 +209,86 @@ export const updateUserRoleInFirestore = async (userId, roleData) => {
     throw err;
   }
 };
+
+// ==========================================
+// 5. SUBJECTS & FACULTY REAL-TIME FIRESTORE SERVICE
+// ==========================================
+export const subscribeSubjects = (callback) => {
+  try {
+    const q = collection(db, "subjects");
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(list);
+    }, (error) => {
+      console.warn("Firestore subjects subscription warning:", error.message);
+      callback([]);
+    });
+  } catch (err) {
+    console.warn("Firestore subjects init error:", err.message);
+    return () => {};
+  }
+};
+
+export const subscribeUsers = (callback) => {
+  try {
+    const q = collection(db, "users");
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(list);
+    }, (error) => {
+      console.warn("Firestore users subscription warning:", error.message);
+      callback([]);
+    });
+  } catch (err) {
+    console.warn("Firestore users init error:", err.message);
+    return () => {};
+  }
+};
+
+export const saveSubjectToFirestore = async (subjectData) => {
+  try {
+    const docId = subjectData.id || `sub_${Date.now()}`;
+    const subjectRef = doc(db, "subjects", docId);
+    await setDoc(subjectRef, {
+      ...subjectData,
+      id: docId,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    return docId;
+  } catch (err) {
+    console.error("Failed to save subject to Firestore:", err);
+    throw err;
+  }
+};
+
+export const deleteSubjectFromFirestore = async (subjectId) => {
+  try {
+    await deleteDoc(doc(db, "subjects", subjectId));
+  } catch (err) {
+    console.error("Failed to delete subject from Firestore:", err);
+    throw err;
+  }
+};
+
+export const createOrUpdateFacultyInFirestore = async ({ name, subjectCode, subjectName, password }) => {
+  try {
+    const cleanName = name.trim();
+    const docId = `faculty_${cleanName.toLowerCase().replace(/\s+/g, "_")}`;
+    const userRef = doc(db, "users", docId);
+    
+    await setDoc(userRef, {
+      uid: docId,
+      name: cleanName,
+      role: "faculty",
+      subjectCode: subjectCode || "",
+      subjectName: subjectName || "",
+      identifier: cleanName,
+      facultyPassword: password || "faculty123",
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    return docId;
+  } catch (err) {
+    console.error("Failed to create/update faculty in Firestore:", err);
+  }
+};

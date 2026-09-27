@@ -3,6 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AeroShards from "../components/AeroShards";
 import { autoTranslateToTamil } from "../utils/tamilTranslator";
+import {
+  subscribeSubjects,
+  saveSubjectToFirestore,
+  deleteSubjectFromFirestore,
+  createOrUpdateFacultyInFirestore,
+} from "../services/firestoreService";
 import "../components/Login.css";
 
 const INITIAL_SUBJECTS = [
@@ -104,6 +110,21 @@ function AdminPage() {
     }
   }, [subjects]);
 
+  // Real-time Firestore Subjects Listener
+  useEffect(() => {
+    const unsub = subscribeSubjects((fsSubs) => {
+      if (fsSubs && fsSubs.length > 0) {
+        setSubjects(sanitizeSubjects(fsSubs));
+      } else {
+        INITIAL_SUBJECTS.forEach((sub) => saveSubjectToFirestore(sub));
+      }
+    });
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, []);
+
   const handleAdminAuthSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -146,12 +167,13 @@ function AdminPage() {
     }
   };
 
-  const handleAddSubject = (e) => {
+  const handleAddSubject = async (e) => {
     e.preventDefault();
     if (!newSubName.trim()) return;
 
     const code = newSubCode.trim() || `EC${Math.floor(1000 + Math.random() * 9000)}`;
     const pass = newSubPassword.trim() || "faculty123";
+    const teacher = newSubTeacher.trim() || "Unassigned";
 
     const newSub = {
       id: `sub_${Date.now()}`,
@@ -160,12 +182,26 @@ function AdminPage() {
       tamil: newSubTamil.trim() || newSubName.trim(),
       icon: "📚",
       notes: 12,
-      assignedTeacher: newSubTeacher.trim() || "Unassigned",
+      assignedTeacher: teacher,
       facultyPassword: pass,
       units: ["Unit 1: Introduction", "Unit 2: Core Principles", "Unit 3: Applications"],
     };
 
-    setSubjects([...subjects, newSub]);
+    try {
+      await saveSubjectToFirestore(newSub);
+      if (teacher !== "Unassigned") {
+        await createOrUpdateFacultyInFirestore({
+          name: teacher,
+          subjectCode: code,
+          subjectName: newSub.name,
+          password: pass,
+        });
+      }
+    } catch (err) {
+      console.warn("Firestore subject add warning:", err);
+    }
+
+    setSubjects((prev) => [...prev, newSub]);
     setShowAddSubjectModal(false);
     setNewSubCode("");
     setNewSubName("");
@@ -191,32 +227,48 @@ function AdminPage() {
     setEditSubPassword(sub.facultyPassword || "faculty123");
   };
 
-  const handleSaveEditSubject = (e) => {
+  const handleSaveEditSubject = async (e) => {
     e.preventDefault();
     if (!editingSubject || !editSubName.trim()) return;
 
-    setSubjects(
-      subjects.map((s) => {
-        if (s.id === editingSubject.id) {
-          return {
-            ...s,
-            code: editSubCode.trim() || s.code,
-            name: editSubName.trim(),
-            tamil: editSubTamil.trim() || editSubName.trim(),
-            assignedTeacher: editSubTeacher.trim() || "Unassigned",
-            facultyPassword: editSubPassword.trim() || s.facultyPassword || "faculty123",
-          };
-        }
-        return s;
-      })
+    const updatedSub = {
+      ...editingSubject,
+      code: editSubCode.trim() || editingSubject.code,
+      name: editSubName.trim(),
+      tamil: editSubTamil.trim() || editSubName.trim(),
+      assignedTeacher: editSubTeacher.trim() || "Unassigned",
+      facultyPassword: editSubPassword.trim() || editingSubject.facultyPassword || "faculty123",
+    };
+
+    try {
+      await saveSubjectToFirestore(updatedSub);
+      if (updatedSub.assignedTeacher !== "Unassigned") {
+        await createOrUpdateFacultyInFirestore({
+          name: updatedSub.assignedTeacher,
+          subjectCode: updatedSub.code,
+          subjectName: updatedSub.name,
+          password: updatedSub.facultyPassword,
+        });
+      }
+    } catch (err) {
+      console.warn("Firestore subject edit warning:", err);
+    }
+
+    setSubjects((prev) =>
+      prev.map((s) => (s.id === editingSubject.id ? updatedSub : s))
     );
 
     setEditingSubject(null);
   };
 
-  const handleDeleteSubject = (id, name) => {
+  const handleDeleteSubject = async (id, name) => {
     if (window.confirm(`Are you sure you want to remove subject "${name}"?`)) {
-      setSubjects(subjects.filter((s) => s.id !== id));
+      try {
+        await deleteSubjectFromFirestore(id);
+      } catch (err) {
+        console.warn("Firestore subject delete warning:", err);
+      }
+      setSubjects((prev) => prev.filter((s) => s.id !== id));
     }
   };
 
