@@ -42,7 +42,7 @@ export function AuthProvider({ children }) {
     });
 
     const unsubSubjects = subscribeSubjects((fsSubs) => {
-      if (fsSubs && fsSubs.length > 0) {
+      if (fsSubs) {
         setFirestoreSubjects(fsSubs);
       }
     });

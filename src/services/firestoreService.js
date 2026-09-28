@@ -38,17 +38,41 @@ export const subscribeNotes = (subjectId, callback) => {
   }
 };
 
-export const addNoteToFirestore = async (noteData) => {
+export const subscribeAllNotes = (callback) => {
   try {
-    const docRef = await addDoc(collection(db, "notes"), {
-      ...noteData,
-      createdAt: serverTimestamp(),
+    const q = collection(db, "notes");
+    return onSnapshot(q, (snapshot) => {
+      const notes = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(notes);
+    }, (error) => {
+      console.warn("Firestore all notes subscription warning:", error.message);
+      callback([]);
     });
-    return docRef.id;
   } catch (err) {
-    console.error("Failed to add note to Firestore:", err);
+    console.warn("Firestore all notes init error:", err.message);
+    return () => {};
+  }
+};
+
+export const saveNoteToFirestore = async (noteData) => {
+  try {
+    const docId = noteData.id || `custom_note_${Date.now()}`;
+    const noteRef = doc(db, "notes", docId);
+    await setDoc(noteRef, {
+      ...noteData,
+      id: docId,
+      createdAt: serverTimestamp(),
+      publishedAt: new Date().toISOString(),
+    }, { merge: true });
+    return docId;
+  } catch (err) {
+    console.error("Failed to save note to Firestore:", err);
     throw err;
   }
+};
+
+export const addNoteToFirestore = async (noteData) => {
+  return await saveNoteToFirestore(noteData);
 };
 
 export const updateNoteInFirestore = async (noteId, updatedData) => {
@@ -70,12 +94,49 @@ export const deleteNoteFromFirestore = async (noteId) => {
   }
 };
 
+export const subscribeAllFiles = (callback) => {
+  try {
+    const q = collection(db, "files");
+    return onSnapshot(q, (snapshot) => {
+      const files = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(files);
+    }, (error) => {
+      console.warn("Firestore all files subscription warning:", error.message);
+      callback([]);
+    });
+  } catch (err) {
+    console.warn("Firestore all files init error:", err.message);
+    return () => {};
+  }
+};
+
+export const saveFileToFirestore = async (fileData) => {
+  try {
+    const docId = fileData.id || `custom_file_${Date.now()}`;
+    const fileRef = doc(db, "files", docId);
+    await setDoc(fileRef, {
+      ...fileData,
+      id: docId,
+      createdAt: serverTimestamp(),
+      uploadedAt: new Date().toISOString(),
+    }, { merge: true });
+    return docId;
+  } catch (err) {
+    console.error("Failed to save file to Firestore:", err);
+    throw err;
+  }
+};
+
 export const deleteFileFromFirestore = async (fileId) => {
   try {
-    await deleteDoc(doc(db, "notes", fileId));
+    await deleteDoc(doc(db, "files", fileId));
   } catch (err) {
-    console.error("Failed to delete file from Firestore:", err);
-    throw err;
+    try {
+      await deleteDoc(doc(db, "notes", fileId));
+    } catch (e) {
+      console.error("Failed to delete file from Firestore:", err);
+      throw err;
+    }
   }
 };
 
@@ -232,12 +293,60 @@ export const updateUserRoleInFirestore = async (userId, roleData) => {
 // ==========================================
 // 5. SUBJECTS & FACULTY REAL-TIME FIRESTORE SERVICE
 // ==========================================
+export const ensureSubjectSystemSentinel = async () => {
+  try {
+    await setDoc(doc(db, "subjects", "_config"), { isSystem: true, initialized: true }, { merge: true });
+  } catch (err) {
+    console.warn("Sentinel check error:", err.message);
+  }
+};
+
 export const subscribeSubjects = (callback) => {
   try {
     const q = collection(db, "subjects");
     return onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      callback(list);
+      const rawList = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((d) => !d.id.startsWith("_") && !d.isSystem && !/^sub_[1-9]$/.test(d.id));
+
+      const seenIds = new Set();
+      const seenKeys = new Set();
+      const uniqueList = [];
+      const duplicateIdsToDelete = [];
+
+      for (const item of rawList) {
+        if (!item || !item.id) continue;
+        const normCode = (item.code || "").trim().toLowerCase();
+        const normName = (item.name || "").trim().toLowerCase();
+        const key = normCode || normName;
+
+        if (seenIds.has(item.id)) {
+          duplicateIdsToDelete.push(item.id);
+          continue;
+        }
+
+        if (key && seenKeys.has(key)) {
+          duplicateIdsToDelete.push(item.id);
+          continue;
+        }
+
+        seenIds.add(item.id);
+        if (key) seenKeys.add(key);
+        uniqueList.push(item);
+      }
+
+      // Purge redundant duplicate documents from Firestore in the background
+      if (duplicateIdsToDelete.length > 0) {
+        duplicateIdsToDelete.forEach(async (dupId) => {
+          try {
+            await deleteDoc(doc(db, "subjects", dupId));
+          } catch (e) {
+            console.warn("Auto cleanup of duplicate subject doc failed:", dupId, e.message);
+          }
+        });
+      }
+
+      callback(uniqueList);
     }, (error) => {
       console.warn("Firestore subjects subscription warning:", error.message);
       callback([]);
@@ -266,7 +375,23 @@ export const subscribeUsers = (callback) => {
 
 export const saveSubjectToFirestore = async (subjectData) => {
   try {
-    const docId = subjectData.id || `sub_${Date.now()}`;
+    if (subjectData.id && /^sub_[1-9]$/.test(subjectData.id)) {
+      console.warn("Blocked legacy dummy subject from saving:", subjectData.id);
+      return subjectData.id;
+    }
+    await ensureSubjectSystemSentinel();
+
+    // Use deterministic slug-based ID so rapid multiple saves or retries target the same document
+    let docId = subjectData.id;
+    if (!docId || (docId.startsWith("sub_") && /^\d+$/.test(docId.replace("sub_", "")))) {
+      const cleanSlug = (subjectData.code || subjectData.name || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+      if (cleanSlug) {
+        docId = `sub_${cleanSlug}`;
+      } else {
+        docId = subjectData.id || `sub_${Date.now()}`;
+      }
+    }
+
     const subjectRef = doc(db, "subjects", docId);
     await setDoc(subjectRef, {
       ...subjectData,
@@ -282,7 +407,9 @@ export const saveSubjectToFirestore = async (subjectData) => {
 
 export const deleteSubjectFromFirestore = async (subjectId) => {
   try {
+    if (subjectId.startsWith("_")) return;
     await deleteDoc(doc(db, "subjects", subjectId));
+    await ensureSubjectSystemSentinel();
   } catch (err) {
     console.error("Failed to delete subject from Firestore:", err);
     throw err;

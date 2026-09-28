@@ -10,63 +10,32 @@ import {
   createOrUpdateFacultyInFirestore,
 } from "../services/firestoreService";
 import "../components/Login.css";
-
-const INITIAL_SUBJECTS = [
-  {
-    id: "sub_1",
-    name: "Engineering Physics",
-    tamil: "பொறியியல் இயற்பியல்",
-    icon: "⚛️",
-    notes: 24,
-    assignedTeacher: "Unassigned",
-  },
-  {
-    id: "sub_2",
-    name: "English",
-    tamil: "ஆங்கிலம்",
-    icon: "📖",
-    notes: 18,
-    assignedTeacher: "Unassigned",
-  },
-  {
-    id: "sub_3",
-    name: "Python",
-    tamil: "பைத்தான்",
-    icon: "🐍",
-    notes: 32,
-    assignedTeacher: "Unassigned",
-  },
-  {
-    id: "sub_4",
-    name: "Wireless Communication",
-    tamil: "வயர்லெஸ் தொடர்பு",
-    icon: "📡",
-    notes: 21,
-    assignedTeacher: "Unassigned",
-  },
-  {
-    id: "sub_5",
-    name: "Analog IC Design",
-    tamil: "அனலாக் IC டிசைன்",
-    icon: "🔌",
-    notes: 16,
-    assignedTeacher: "Unassigned",
-  },
-  {
-    id: "sub_6",
-    name: "4G & 5G Cellular Tech",
-    tamil: "4G & 5G Cellular Tech",
-    icon: "📶",
-    notes: 28,
-    assignedTeacher: "Unassigned",
-  },
-];
-
 const sanitizeSubjects = (list) => {
-  return list.map((s) => ({
-    ...s,
-    assignedTeacher: s.assignedTeacher || "Unassigned",
-  }));
+  if (!Array.isArray(list)) return [];
+  const seenIds = new Set();
+  const seenKeys = new Set();
+  const result = [];
+
+  for (const s of list) {
+    if (!s || !s.id) continue;
+    if (s.id.startsWith("_") || s.isSystem || /^sub_[1-9]$/.test(s.id)) continue;
+    if (seenIds.has(s.id)) continue;
+
+    const normCode = (s.code || "").trim().toLowerCase();
+    const normName = (s.name || "").trim().toLowerCase();
+    const key = normCode || normName;
+
+    if (key && seenKeys.has(key)) continue;
+
+    seenIds.add(s.id);
+    if (key) seenKeys.add(key);
+
+    result.push({
+      ...s,
+      assignedTeacher: s.assignedTeacher || "Unassigned",
+    });
+  }
+  return result;
 };
 
 function AdminPage() {
@@ -89,9 +58,10 @@ function AdminPage() {
   const [subjects, setSubjects] = useState(() => {
     try {
       const saved = localStorage.getItem("studynotes_subjects");
-      return saved ? sanitizeSubjects(JSON.parse(saved)) : INITIAL_SUBJECTS;
+      const list = saved ? sanitizeSubjects(JSON.parse(saved)) : [];
+      return list.filter((s) => !s.id.startsWith("_") && !/^sub_[1-9]$/.test(s.id));
     } catch (e) {
-      return INITIAL_SUBJECTS;
+      return [];
     }
   });
 
@@ -110,13 +80,39 @@ function AdminPage() {
     }
   }, [subjects]);
 
+  const getDeletedSubjectIds = () => {
+    try {
+      return JSON.parse(localStorage.getItem("studynotes_deleted_subject_ids") || "[]");
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const addDeletedSubjectId = (id) => {
+    const ids = getDeletedSubjectIds();
+    if (!ids.includes(id)) {
+      ids.push(id);
+      try {
+        localStorage.setItem("studynotes_deleted_subject_ids", JSON.stringify(ids));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
   // Real-time Firestore Subjects Listener
   useEffect(() => {
     const unsub = subscribeSubjects((fsSubs) => {
-      if (fsSubs && fsSubs.length > 0) {
-        setSubjects(sanitizeSubjects(fsSubs));
-      } else {
-        INITIAL_SUBJECTS.forEach((sub) => saveSubjectToFirestore(sub));
+      if (fsSubs) {
+        const deletedIds = getDeletedSubjectIds();
+        const activeSubs = fsSubs.filter((s) => !deletedIds.includes(s.id));
+        const sanitized = sanitizeSubjects(activeSubs);
+        setSubjects(sanitized);
+        try {
+          localStorage.setItem("studynotes_subjects", JSON.stringify(sanitized));
+        } catch (e) {
+          console.error("Failed to save subjects to localStorage", e);
+        }
       }
     });
 
@@ -167,19 +163,42 @@ function AdminPage() {
     }
   };
 
+  const [isSubmittingSubject, setIsSubmittingSubject] = useState(false);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
   const handleAddSubject = async (e) => {
     e.preventDefault();
-    if (!newSubName.trim()) return;
+    if (isSubmittingSubject) return;
+
+    const trimmedName = newSubName.trim();
+    if (!trimmedName) return;
 
     const code = newSubCode.trim() || `EC${Math.floor(1000 + Math.random() * 9000)}`;
     const pass = newSubPassword.trim() || "faculty123";
     const teacher = newSubTeacher.trim() || "Unassigned";
 
+    // Prevent duplicate subjects by code or name
+    const alreadyExists = subjects.some(
+      (s) =>
+        (s.code && s.code.toLowerCase() === code.toLowerCase()) ||
+        (s.name && s.name.toLowerCase() === trimmedName.toLowerCase())
+    );
+
+    if (alreadyExists) {
+      alert(`A subject with name "${trimmedName}" or code "${code}" already exists!`);
+      return;
+    }
+
+    setIsSubmittingSubject(true);
+
+    const cleanSlug = (code || trimmedName).toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+    const subId = `sub_${cleanSlug}`;
+
     const newSub = {
-      id: `sub_${Date.now()}`,
+      id: subId,
       code: code,
-      name: newSubName.trim(),
-      tamil: newSubTamil.trim() || newSubName.trim(),
+      name: trimmedName,
+      tamil: newSubTamil.trim() || trimmedName,
       icon: "📚",
       notes: 12,
       assignedTeacher: teacher,
@@ -197,17 +216,35 @@ function AdminPage() {
           password: pass,
         });
       }
+
+      setSubjects((prev) => {
+        const withoutCurrent = prev.filter(
+          (s) =>
+            s.id !== newSub.id &&
+            (!s.code || s.code.toLowerCase() !== code.toLowerCase()) &&
+            s.name.toLowerCase() !== trimmedName.toLowerCase()
+        );
+        const updated = sanitizeSubjects([...withoutCurrent, newSub]);
+        try {
+          localStorage.setItem("studynotes_subjects", JSON.stringify(updated));
+        } catch (err) {
+          console.error(err);
+        }
+        return updated;
+      });
+
+      setShowAddSubjectModal(false);
+      setNewSubCode("");
+      setNewSubName("");
+      setNewSubTamil("");
+      setNewSubTeacher("");
+      setNewSubPassword("");
     } catch (err) {
       console.warn("Firestore subject add warning:", err);
+      alert("Failed to add subject: " + (err.message || "Unknown error"));
+    } finally {
+      setIsSubmittingSubject(false);
     }
-
-    setSubjects((prev) => [...prev, newSub]);
-    setShowAddSubjectModal(false);
-    setNewSubCode("");
-    setNewSubName("");
-    setNewSubTamil("");
-    setNewSubTeacher("");
-    setNewSubPassword("");
   };
 
   // Admin Edit Subject Modal Form State
@@ -229,7 +266,9 @@ function AdminPage() {
 
   const handleSaveEditSubject = async (e) => {
     e.preventDefault();
-    if (!editingSubject || !editSubName.trim()) return;
+    if (!editingSubject || !editSubName.trim() || isSubmittingEdit) return;
+
+    setIsSubmittingEdit(true);
 
     const updatedSub = {
       ...editingSubject,
@@ -250,25 +289,61 @@ function AdminPage() {
           password: updatedSub.facultyPassword,
         });
       }
+
+      setSubjects((prev) =>
+        sanitizeSubjects(prev.map((s) => (s.id === editingSubject.id ? updatedSub : s)))
+      );
+
+      setEditingSubject(null);
     } catch (err) {
       console.warn("Firestore subject edit warning:", err);
+      alert("Failed to update subject: " + (err.message || "Unknown error"));
+    } finally {
+      setIsSubmittingEdit(false);
     }
-
-    setSubjects((prev) =>
-      prev.map((s) => (s.id === editingSubject.id ? updatedSub : s))
-    );
-
-    setEditingSubject(null);
   };
 
   const handleDeleteSubject = async (id, name) => {
     if (window.confirm(`Are you sure you want to remove subject "${name}"?`)) {
+      addDeletedSubjectId(id);
       try {
         await deleteSubjectFromFirestore(id);
       } catch (err) {
         console.warn("Firestore subject delete warning:", err);
       }
-      setSubjects((prev) => prev.filter((s) => s.id !== id));
+      setSubjects((prev) => {
+        const updated = prev.filter(
+          (s) => s.id !== id && (name ? s.name.toLowerCase() !== name.toLowerCase() : true)
+        );
+        try {
+          localStorage.setItem("studynotes_subjects", JSON.stringify(updated));
+        } catch (e) {
+          console.error("Failed to save subjects to localStorage", e);
+        }
+        return updated;
+      });
+    }
+  };
+
+  const handleDeleteAllSubjects = async () => {
+    if (window.confirm("Are you sure you want to permanently delete ALL subjects from Firestore?")) {
+      const toDelete = [...subjects];
+      toDelete.forEach((s) => addDeletedSubjectId(s.id));
+      setSubjects([]);
+      try {
+        localStorage.setItem("studynotes_subjects", JSON.stringify([]));
+      } catch (e) {
+        console.error("Failed to save subjects to localStorage", e);
+      }
+      try {
+        for (const s of toDelete) {
+          if (!s.id.startsWith("_")) {
+            await deleteSubjectFromFirestore(s.id);
+          }
+        }
+      } catch (err) {
+        console.warn("Firestore delete all warning:", err);
+      }
     }
   };
 
@@ -542,13 +617,42 @@ function AdminPage() {
               <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.6rem" }}>Subject & Faculty Management</h2>
               <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>Update assigned teachers or remove curriculum subjects.</p>
             </div>
-            <button className="admin-add-sub-btn" onClick={() => setShowAddSubjectModal(true)}>
-              ➕ Add Subject
-            </button>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+              {subjects.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDeleteAllSubjects}
+                  style={{
+                    background: "rgba(239, 68, 68, 0.15)",
+                    border: "1px solid rgba(239, 68, 68, 0.4)",
+                    color: "#fca5a5",
+                    padding: "8px 16px",
+                    borderRadius: "10px",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  🗑️ Delete All Subjects
+                </button>
+              )}
+              <button className="admin-add-sub-btn" onClick={() => setShowAddSubjectModal(true)}>
+                ➕ Add Subject
+              </button>
+            </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "20px" }}>
-            {subjects.map((subject) => (
+            {subjects.length === 0 ? (
+              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "48px 20px", background: "rgba(17, 24, 39, 0.5)", borderRadius: "16px", border: "1px dashed rgba(255, 255, 255, 0.15)" }}>
+                <span style={{ fontSize: "2.5rem", display: "block", marginBottom: "12px" }}>📭</span>
+                <h3 style={{ fontSize: "1.2rem", color: "#ffffff", marginBottom: "6px" }}>No curriculum subjects found</h3>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", margin: 0 }}>
+                  All subjects have been removed. Click <strong>"➕ Add Subject"</strong> above to create a new curriculum subject.
+                </p>
+              </div>
+            ) : (
+              subjects.map((subject) => (
               <div
                 key={subject.id}
                 style={{
@@ -598,7 +702,7 @@ function AdminPage() {
                   </strong>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
         </div>
       </div>
@@ -690,12 +794,22 @@ function AdminPage() {
               </div>
 
               <div style={{ display: "flex", gap: "12px", marginTop: "20px" }}>
-                <button type="submit" className="primary-btn" style={{ flex: 1 }}>
-                  ➕ Save & Add Subject
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={isSubmittingSubject}
+                  style={{
+                    flex: 1,
+                    opacity: isSubmittingSubject ? 0.7 : 1,
+                    cursor: isSubmittingSubject ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isSubmittingSubject ? "⏳ Saving Subject..." : "➕ Save & Add Subject"}
                 </button>
                 <button
                   type="button"
                   className="secondary-btn"
+                  disabled={isSubmittingSubject}
                   onClick={() => setShowAddSubjectModal(false)}
                 >
                   Cancel
@@ -708,9 +822,9 @@ function AdminPage() {
 
       {/* ADMIN EDIT SUBJECT MODAL */}
       {editingSubject && (
-        <div className="note-modal-backdrop" onClick={() => setEditingSubject(null)}>
+        <div className="note-modal-backdrop" onClick={() => !isSubmittingEdit && setEditingSubject(null)}>
           <div className="note-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "480px" }}>
-            <button className="modal-close-btn" onClick={() => setEditingSubject(null)}>
+            <button className="modal-close-btn" onClick={() => !isSubmittingEdit && setEditingSubject(null)}>
               ✕
             </button>
 
@@ -792,12 +906,22 @@ function AdminPage() {
               </div>
 
               <div style={{ display: "flex", gap: "12px", marginTop: "20px" }}>
-                <button type="submit" className="primary-btn" style={{ flex: 1 }}>
-                  💾 Save Changes
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={isSubmittingEdit}
+                  style={{
+                    flex: 1,
+                    opacity: isSubmittingEdit ? 0.7 : 1,
+                    cursor: isSubmittingEdit ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isSubmittingEdit ? "⏳ Saving Changes..." : "💾 Save Changes"}
                 </button>
                 <button
                   type="button"
                   className="secondary-btn"
+                  disabled={isSubmittingEdit}
                   onClick={() => setEditingSubject(null)}
                 >
                   Cancel

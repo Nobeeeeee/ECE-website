@@ -75,7 +75,14 @@ function LoginPage({ onClose, onLoginSuccess }) {
       if (onLoginSuccess) {
         onLoginSuccess(user);
       } else {
-        navigate("/");
+        const targetRole = user?.role || role;
+        if (targetRole === "faculty") {
+          navigate("/faculty");
+        } else if (targetRole === "admin") {
+          navigate("/admin");
+        } else {
+          navigate("/student");
+        }
       }
     } catch (err) {
       console.error(err);

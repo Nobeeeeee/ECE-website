@@ -14,95 +14,32 @@ import {
 } from "../services/firestoreService";
 import "../App.css";
 
-const INITIAL_SUBJECTS = [
-  {
-    id: "sub_1",
-    name: "Engineering Physics",
-    tamil: "பொறியியல் இயற்பியல்",
-    icon: "⚛️",
-    notes: 24,
-    assignedTeacher: "Unassigned",
-    units: ["Unit 1: Crystallography", "Unit 2: Quantum Physics", "Unit 3: Fibre Optics"],
-  },
-  {
-    id: "sub_2",
-    name: "English",
-    tamil: "ஆங்கிலம்",
-    icon: "📖",
-    notes: 18,
-    assignedTeacher: "Unassigned",
-    units: ["Unit 1: Professional Communication", "Unit 2: Technical Writing"],
-  },
-  {
-    id: "sub_3",
-    name: "Python",
-    tamil: "பைத்தான்",
-    icon: "🐍",
-    notes: 32,
-    assignedTeacher: "Unassigned",
-    units: ["Unit 1: Data Types & Logic", "Unit 2: Functions & Modules", "Unit 3: OOP"],
-  },
-  {
-    id: "sub_4",
-    name: "Wireless Communication",
-    tamil: "வயர்லெஸ் தொடர்பு",
-    icon: "📡",
-    notes: 21,
-    assignedTeacher: "Unassigned",
-    units: ["Unit 1: Cellular Concepts", "Unit 2: Mobile Radio Propagation"],
-  },
-  {
-    id: "sub_5",
-    name: "Analog IC Design",
-    tamil: "அனலாக் IC டிசைன்",
-    icon: "🔌",
-    notes: 16,
-    assignedTeacher: "Unassigned",
-    units: ["Unit 1: Single Stage Amplifiers", "Unit 2: Differential Amplifiers"],
-  },
-  {
-    id: "sub_6",
-    name: "4G & 5G Cellular Tech",
-    tamil: "4G & 5G Cellular Tech",
-    icon: "📶",
-    notes: 28,
-    assignedTeacher: "Unassigned",
-    units: ["Unit 1: LTE Architecture", "Unit 2: 5G NR Waveforms"],
-  },
-  {
-    id: "sub_7",
-    name: "Environmental Science",
-    tamil: "சுற்றுச்சூழல் அறிவியல்",
-    icon: "🌱",
-    notes: 19,
-    assignedTeacher: "Unassigned",
-    units: ["Unit 1: Ecosystems", "Unit 2: Biodiversity", "Unit 3: Pollution Control"],
-  },
-  {
-    id: "sub_8",
-    name: "Computer Networks",
-    tamil: "கணினி வலைப்பின்னல்கள்",
-    icon: "🌐",
-    notes: 35,
-    assignedTeacher: "Unassigned",
-    units: ["Unit 1: OSI Model", "Unit 2: Routing Algorithms", "Unit 3: Transport Layer"],
-  },
-  {
-    id: "sub_9",
-    name: "Digital Signal Processing",
-    tamil: "டிஜிட்டல் சிக்னல் பிராசஸிங்",
-    icon: "〽️",
-    notes: 22,
-    assignedTeacher: "Unassigned",
-    units: ["Unit 1: Discrete Fourier Transform", "Unit 2: IIR/FIR Filter Design"],
-  },
-];
-
 const sanitizeSubjects = (list) => {
-  return list.map((s) => ({
-    ...s,
-    assignedTeacher: s.assignedTeacher || "Unassigned",
-  }));
+  if (!Array.isArray(list)) return [];
+  const seenIds = new Set();
+  const seenKeys = new Set();
+  const result = [];
+
+  for (const s of list) {
+    if (!s || !s.id) continue;
+    if (s.id.startsWith("_") || s.isSystem || /^sub_[1-9]$/.test(s.id)) continue;
+    if (seenIds.has(s.id)) continue;
+
+    const normCode = (s.code || "").trim().toLowerCase();
+    const normName = (s.name || "").trim().toLowerCase();
+    const key = normCode || normName;
+
+    if (key && seenKeys.has(key)) continue;
+
+    seenIds.add(s.id);
+    if (key) seenKeys.add(key);
+
+    result.push({
+      ...s,
+      assignedTeacher: s.assignedTeacher || "Unassigned",
+    });
+  }
+  return result;
 };
 
 function Dashboard() {
@@ -122,10 +59,10 @@ function Dashboard() {
   const [subjects, setSubjects] = useState(() => {
     try {
       const saved = localStorage.getItem("studynotes_subjects");
-      return saved ? sanitizeSubjects(JSON.parse(saved)) : INITIAL_SUBJECTS;
+      const list = saved ? sanitizeSubjects(JSON.parse(saved)) : [];
+      return list.filter((s) => !s.id.startsWith("_") && !/^sub_[1-9]$/.test(s.id));
     } catch (e) {
-      console.error("Failed to load subjects from localStorage", e);
-      return INITIAL_SUBJECTS;
+      return [];
     }
   });
 
@@ -140,17 +77,14 @@ function Dashboard() {
   // Real-time Firestore Subjects Listener
   useEffect(() => {
     const unsub = subscribeSubjects((fsSubs) => {
-      if (fsSubs && fsSubs.length > 0) {
-        setSubjects((prev) => {
-          const map = new Map();
-          fsSubs.forEach((s) => map.set(s.id, s));
-          prev.forEach((s) => {
-            if (!map.has(s.id)) map.set(s.id, s);
-          });
-          return sanitizeSubjects(Array.from(map.values()));
-        });
-      } else {
-        INITIAL_SUBJECTS.forEach((sub) => saveSubjectToFirestore(sub));
+      if (fsSubs) {
+        const sanitized = sanitizeSubjects(fsSubs);
+        setSubjects(sanitized);
+        try {
+          localStorage.setItem("studynotes_subjects", JSON.stringify(sanitized));
+        } catch (e) {
+          console.error("Failed to save subjects to localStorage", e);
+        }
       }
     });
 
@@ -412,7 +346,7 @@ function Dashboard() {
     : subjects;
 
   const availableSubjects = !currentUser
-    ? INITIAL_SUBJECTS
+    ? subjects
     : isFaculty
     ? facultyAssignedSubjects
     : subjects;

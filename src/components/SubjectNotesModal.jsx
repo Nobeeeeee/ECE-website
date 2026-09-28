@@ -5,6 +5,8 @@ import {
   subscribeNotes, 
   subscribeAssignments, 
   subscribeSubmissions,
+  saveNoteToFirestore,
+  saveFileToFirestore,
   createAssignmentInFirestore,
   deleteAssignmentFromFirestore,
   submitStudentAssignmentToFirestore,
@@ -111,9 +113,28 @@ export default function SubjectNotesModal({
     }
   });
 
-  // Subscribe to real-time Firestore assignments & submissions
+  // Subscribe to real-time Firestore notes, assignments & submissions
   useEffect(() => {
     if (!subject?.id) return;
+
+    const unsubNotes = subscribeNotes(subject.id, (fsNotes) => {
+      if (fsNotes && fsNotes.length > 0) {
+        setCustomNotesState((prev) => {
+          const mergedMap = new Map();
+          prev.forEach((n) => mergedMap.set(n.id, n));
+          fsNotes.forEach((n) => mergedMap.set(n.id, n));
+          const list = Array.from(mergedMap.values());
+          if (onUpdateNotes) onUpdateNotes(list);
+          try {
+            localStorage.setItem("studynotes_custom_notes", JSON.stringify(list));
+          } catch (e) {
+            console.error(e);
+          }
+          return list;
+        });
+      }
+    });
+
     const unsubAssigns = subscribeAssignments(subject.id, (fsAssigns) => {
       if (fsAssigns && fsAssigns.length > 0) {
         setCustomAssignmentsState((prev) => {
@@ -139,6 +160,7 @@ export default function SubjectNotesModal({
     });
 
     return () => {
+      if (unsubNotes) unsubNotes();
       if (unsubAssigns) unsubAssigns();
       if (unsubSubs) unsubSubs();
     };
@@ -147,6 +169,125 @@ export default function SubjectNotesModal({
   // Edit modal states
   const [editingNote, setEditingNote] = useState(null);
   const [editingFile, setEditingFile] = useState(null);
+
+  // Create / Publish Note state (Faculty)
+  const [showCreateNoteModal, setShowCreateNoteModal] = useState(false);
+  const [modalNoteUnit, setModalNoteUnit] = useState("Unit 1");
+  const [modalNoteType, setModalNoteType] = useState("Lecture Notes");
+  const [modalNoteTitle, setModalNoteTitle] = useState("");
+  const [modalNoteReadTime, setModalNoteReadTime] = useState("5 mins read • 10 Pages");
+  const [modalNoteDesc, setModalNoteDesc] = useState("");
+  const [modalNoteHeading, setModalNoteHeading] = useState("1. Topic Overview & Concepts");
+  const [modalNoteBody, setModalNoteBody] = useState("");
+  const [modalNoteFileObj, setModalNoteFileObj] = useState(null);
+  const [isPublishingModalNote, setIsPublishingModalNote] = useState(false);
+
+  const handlePublishNoteInModal = async (e) => {
+    e.preventDefault();
+    if (!modalNoteTitle.trim() || isPublishingModalNote) return;
+
+    if (!modalNoteBody.trim() && !modalNoteFileObj) {
+      alert("Please provide note content or attach a PDF/reference file.");
+      return;
+    }
+
+    setIsPublishingModalNote(true);
+
+    let fileDataUrl = null;
+    if (modalNoteFileObj) {
+      try {
+        fileDataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(modalNoteFileObj);
+        });
+      } catch (err) {
+        console.warn("File read error:", err);
+      }
+    }
+
+    const newNoteId = `custom_note_${Date.now()}`;
+    const newNote = {
+      id: newNoteId,
+      subjectId: subject.id,
+      subjectName: subject.name,
+      subjectCode: subject.code || "",
+      unit: modalNoteUnit,
+      type: modalNoteType,
+      typeTagClass: modalNoteType.includes("2-Mark")
+        ? "q2mark"
+        : modalNoteType.includes("16") || modalNoteType.includes("13")
+        ? "q13mark"
+        : modalNoteType.includes("PDF")
+        ? "pdf"
+        : "lecture",
+      title: `${modalNoteUnit} — ${modalNoteTitle.trim()}`,
+      readTime: modalNoteReadTime.trim() || "5 mins read • Printable",
+      description: modalNoteDesc.trim() || `Course study notes published by faculty for ${subject.name}.`,
+      publishedBy: currentUser?.name || subject.assignedTeacher || "Faculty",
+      createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      sections: [
+        {
+          heading: modalNoteHeading.trim() || modalNoteTitle.trim(),
+          body: modalNoteBody.trim() || (modalNoteFileObj ? `Attached File: ${modalNoteFileObj.name}` : "Comprehensive study materials prepared by assigned faculty."),
+        },
+      ],
+      fileName: modalNoteFileObj ? modalNoteFileObj.name : "",
+      fileSize: modalNoteFileObj ? (modalNoteFileObj.size / (1024 * 1024)).toFixed(2) + " MB" : "",
+      fileUrl: fileDataUrl || "",
+    };
+
+    try {
+      await saveNoteToFirestore(newNote);
+
+      if (modalNoteFileObj) {
+        const newFile = {
+          id: `custom_file_${Date.now()}`,
+          subjectId: subject.id,
+          subjectName: subject.name,
+          unit: modalNoteUnit,
+          fileType: modalNoteType,
+          fileName: modalNoteFileObj.name,
+          fileSize: (modalNoteFileObj.size / (1024 * 1024)).toFixed(2) + " MB",
+          title: modalNoteTitle.trim(),
+          description: modalNoteDesc.trim() || `Reference file uploaded by faculty for ${subject.name}.`,
+          uploadedBy: currentUser?.name || subject.assignedTeacher || "Faculty",
+          previewUrl: fileDataUrl,
+          fileUrl: fileDataUrl,
+          isImage: modalNoteFileObj.type?.startsWith("image/"),
+          uploadedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        };
+        await saveFileToFirestore(newFile);
+
+        setCustomFilesState((prev) => {
+          const updated = [newFile, ...prev];
+          localStorage.setItem("studynotes_custom_files", JSON.stringify(updated));
+          if (onUpdateFiles) onUpdateFiles(updated);
+          return updated;
+        });
+      }
+
+      setCustomNotesState((prev) => {
+        const updated = [newNote, ...prev];
+        localStorage.setItem("studynotes_custom_notes", JSON.stringify(updated));
+        if (onUpdateNotes) onUpdateNotes(updated);
+        return updated;
+      });
+
+      setShowCreateNoteModal(false);
+      setModalNoteTitle("");
+      setModalNoteDesc("");
+      setModalNoteBody("");
+      setModalNoteFileObj(null);
+      alert(`🎉 Published Successfully!\n\nNote "${newNote.title}" is now published and visible to logged-in students in their Student Dashboard.`);
+    } catch (err) {
+      console.error("Failed to publish note to Firestore:", err);
+      alert("Failed to publish note: " + (err.message || "Network error"));
+    } finally {
+      setIsPublishingModalNote(false);
+    }
+  };
 
   // Assignment creation modal state (Faculty)
   const [showCreateAssignmentModal, setShowCreateAssignmentModal] = useState(false);
@@ -301,8 +442,13 @@ export default function SubjectNotesModal({
   };
 
   // Delete Handlers
-  const handleDeleteNote = (noteId) => {
+  const handleDeleteNote = async (noteId) => {
     if (window.confirm("Are you sure you want to delete this study note?")) {
+      try {
+        await deleteNoteFromFirestore(noteId);
+      } catch (e) {
+        console.warn("Firestore delete note warning:", e);
+      }
       const updatedMaster = customNotesState.filter((n) => n.id !== noteId);
       localStorage.setItem("studynotes_custom_notes", JSON.stringify(updatedMaster));
       setCustomNotesState(updatedMaster);
@@ -310,8 +456,13 @@ export default function SubjectNotesModal({
     }
   };
 
-  const handleDeleteFile = (fileId) => {
+  const handleDeleteFile = async (fileId) => {
     if (window.confirm("Are you sure you want to delete this uploaded file?")) {
+      try {
+        await deleteFileFromFirestore(fileId);
+      } catch (e) {
+        console.warn("Firestore delete file warning:", e);
+      }
       const updatedMaster = customFilesState.filter((f) => f.id !== fileId);
       localStorage.setItem("studynotes_custom_files", JSON.stringify(updatedMaster));
       setCustomFilesState(updatedMaster);
@@ -648,6 +799,28 @@ export default function SubjectNotesModal({
                 <span className="sub-badge count">
                   📝 {viewMode === "assignments" ? `${subjectAssignments.length} Active Assignment(s)` : `${allNotes.length + customFiles.length} Resource(s)`}
                 </span>
+                {isFacultyOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateNoteModal(true)}
+                    style={{
+                      background: "linear-gradient(135deg, #9333ea, #06b6d4)",
+                      color: "#ffffff",
+                      border: "none",
+                      padding: "4px 12px",
+                      borderRadius: "20px",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      boxShadow: "0 2px 8px rgba(147, 51, 234, 0.4)",
+                    }}
+                  >
+                    ➕ Publish Note
+                  </button>
+                )}
               </div>
 
               {/* VIEW MODE TOGGLE BUTTONS */}
@@ -1215,6 +1388,16 @@ export default function SubjectNotesModal({
                   }}
                 >
                   🔐 Sign In / Register to Access Notes
+                </button>
+              )}
+              {currentUser && isFacultyOrAdmin && (
+                <button
+                  type="button"
+                  className="primary-btn"
+                  style={{ padding: "10px 24px", fontSize: "0.9rem", background: "linear-gradient(135deg, #9333ea, #06b6d4)", marginTop: "6px" }}
+                  onClick={() => setShowCreateNoteModal(true)}
+                >
+                  ➕ Publish First Note for {subject.name}
                 </button>
               )}
             </div>
@@ -1970,6 +2153,153 @@ export default function SubjectNotesModal({
                     style={{ padding: "8px 20px" }}
                   >
                     💾 Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* FACULTY CREATE & PUBLISH NOTE MODAL */}
+        {showCreateNoteModal && (
+          <div className="note-modal-backdrop" onClick={() => !isPublishingModalNote && setShowCreateNoteModal(false)}>
+            <div
+              className="note-modal-card"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: "600px", width: "92%", maxHeight: "90vh", overflowY: "auto", border: "1px solid rgba(168, 85, 247, 0.4)", boxShadow: "0 20px 50px rgba(0,0,0,0.8)" }}
+            >
+              <button
+                className="modal-close-btn"
+                onClick={() => !isPublishingModalNote && setShowCreateNoteModal(false)}
+                disabled={isPublishingModalNote}
+              >
+                ✕
+              </button>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+                <span style={{ fontSize: "2rem" }}>✍️</span>
+                <div>
+                  <h3 style={{ margin: 0, color: "#ffffff", fontSize: "1.3rem" }}>
+                    Publish New Note for {subject.name}
+                  </h3>
+                  <span style={{ fontSize: "0.82rem", color: "var(--accent-purple-light)" }}>
+                    Instantly visible to logged-in students in this subject.
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handlePublishNoteInModal} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "0.82rem", marginBottom: "4px" }}>
+                      Unit / Chapter *
+                    </label>
+                    <select
+                      value={modalNoteUnit}
+                      onChange={(e) => setModalNoteUnit(e.target.value)}
+                      style={{ width: "100%", padding: "9px 12px", background: "rgba(255, 255, 255, 0.05)", border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "8px", color: "#ffffff" }}
+                    >
+                      <option value="Unit 1">Unit 1</option>
+                      <option value="Unit 2">Unit 2</option>
+                      <option value="Unit 3">Unit 3</option>
+                      <option value="Unit 4">Unit 4</option>
+                      <option value="Unit 5">Unit 5</option>
+                      <option value="Lab Manual">Lab Manual</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "0.82rem", marginBottom: "4px" }}>
+                      Note Format Type *
+                    </label>
+                    <select
+                      value={modalNoteType}
+                      onChange={(e) => setModalNoteType(e.target.value)}
+                      style={{ width: "100%", padding: "9px 12px", background: "rgba(255, 255, 255, 0.05)", border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "8px", color: "#ffffff" }}
+                    >
+                      <option value="Lecture Notes">📘 Lecture Notes</option>
+                      <option value="2-Mark Q&A">❓ 2-Mark Short Q&A</option>
+                      <option value="16-Mark Problem">📄 16-Mark Exam Solutions</option>
+                      <option value="Formula Summary">📑 Formula Sheet</option>
+                      <option value="PDF Document">📂 PDF Document</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "0.82rem", marginBottom: "4px" }}>
+                    Note Title / Topic *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={modalNoteTitle}
+                    onChange={(e) => setModalNoteTitle(e.target.value)}
+                    placeholder="e.g. Memory Segmentation & Physical Address Calculation"
+                    style={{ width: "100%", padding: "9px 12px", background: "rgba(255, 255, 255, 0.05)", border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "8px", color: "#ffffff" }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "0.82rem", marginBottom: "4px" }}>
+                    Topic Heading (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={modalNoteHeading}
+                    onChange={(e) => setModalNoteHeading(e.target.value)}
+                    placeholder="e.g. 1. Concept of Segment Registers and Offset"
+                    style={{ width: "100%", padding: "9px 12px", background: "rgba(255, 255, 255, 0.05)", border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "8px", color: "#ffffff" }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "0.82rem", marginBottom: "4px" }}>
+                    Note Body / Explanations / Questions & Answers *
+                  </label>
+                  <textarea
+                    rows={5}
+                    value={modalNoteBody}
+                    onChange={(e) => setModalNoteBody(e.target.value)}
+                    placeholder="Enter detailed notes, equations, bullet points, question answers, or derivations..."
+                    style={{ width: "100%", padding: "10px 12px", background: "rgba(255, 255, 255, 0.05)", border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "8px", color: "#ffffff", lineHeight: 1.5 }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "0.82rem", marginBottom: "4px" }}>
+                    Attach Reference File or PDF (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/*,.doc,.docx"
+                    onChange={(e) => setModalNoteFileObj(e.target.files?.[0] || null)}
+                    style={{ color: "#ffffff", fontSize: "0.85rem" }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    disabled={isPublishingModalNote}
+                    onClick={() => setShowCreateNoteModal(false)}
+                    style={{ padding: "8px 16px" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="primary-btn"
+                    disabled={isPublishingModalNote}
+                    style={{
+                      padding: "8px 20px",
+                      background: "linear-gradient(135deg, #9333ea, #06b6d4)",
+                      opacity: isPublishingModalNote ? 0.7 : 1,
+                      cursor: isPublishingModalNote ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isPublishingModalNote ? "⏳ Publishing..." : "🚀 Publish Note"}
                   </button>
                 </div>
               </form>
