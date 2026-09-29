@@ -264,37 +264,6 @@ export default function StudentDashboard() {
     setLanguage((prev) => (prev === "English" ? "Tamil" : "English"));
   };
 
-  const studentCategories = [
-    {
-      id: "std_qbank",
-      title: language === "English" ? "❓ 2-Mark & 16-Mark Q&A Bank" : "❓ 2-மதிப்பெண் & 16-மதிப்பெண் வினா வங்கி",
-      description: "Access unit-wise solved short questions & 16-mark university exam questions",
-      badge: "Question Bank",
-      action: "qbank",
-    },
-    {
-      id: "std_assignments",
-      title: language === "English" ? "📤 Submit Unit Assignments" : "📤 ஒப்படைப்புகள் சமர்ப்பிக்கவும்",
-      description: "Upload & submit your unit assignments, track due dates, and check faculty grades & feedback",
-      badge: "Assignments",
-      action: "assignments",
-    },
-    {
-      id: "std_pdf_notes",
-      title: language === "English" ? "📑 Download PDF Study Notes" : "📑 PDF பாடக் குறிப்புகள் பதிவிறக்கவும்",
-      description: "Download unit lecture notes & custom study materials generated as formatted PDF files",
-      badge: "PDF Downloads",
-      action: "pdf_docs",
-    },
-    {
-      id: "std_lab_manuals",
-      title: language === "English" ? "🧪 ECE Lab Manuals & Experiments" : "🧪 ECE செய்முறை கையேடுகள்",
-      description: "Explore circuit diagrams, lab manual procedures, software codes, and viva questions",
-      badge: "Lab Manuals",
-      action: "lab_manuals",
-    },
-  ];
-
   const filteredSubjects = subjects.filter(
     (subject) =>
       subject.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -313,7 +282,6 @@ export default function StudentDashboard() {
 
         <nav className="navbar-links">
           <a href="#home">Home</a>
-          <a href="#categories">Resources</a>
           <a href="#subjects">Subjects</a>
         </nav>
 
@@ -425,38 +393,6 @@ export default function StudentDashboard() {
         </div>
       </section>
 
-      {/* STUDENT CATEGORIES & QUICK ACTIONS */}
-      <section className="categories-section" id="categories">
-        <div className="section-header">
-          <h2>🎯 Quick Student Resources</h2>
-          <p>Quickly access solved question banks, assignments, PDF notes, and lab manuals.</p>
-        </div>
-
-        <div className="categories-grid">
-          {studentCategories.map((category) => (
-            <div
-              key={category.id}
-              className="category-card"
-              onClick={() => {
-                const targetSub = subjects[0];
-                if (targetSub) handleOpenSubject(targetSub, category.action);
-              }}
-            >
-              <div className="category-header">
-                <span className="category-badge">{category.badge}</span>
-              </div>
-
-              <h3>{category.title}</h3>
-              <p>{category.description}</p>
-
-              <button className="category-btn">
-                Open Resource →
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ECE CURRICULUM SUBJECTS GRID SECTION */}
       <section className="subjects-section" id="subjects">
         <div className="section-header">
@@ -509,20 +445,26 @@ export default function StudentDashboard() {
               const pubCount = getSubjectPublishedCount(subject.id, subject.name);
 
               if (subjectViewMode === "expanded") {
-                const units = subject.units || ["Unit 1: Fundamentals", "Unit 2: Core Theory", "Unit 3: Applications"];
-
                 return (
                   <div key={subject.id} className="subject-card expanded-mode">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
                         <div style={{ fontSize: "2.8rem" }}>{subject.icon}</div>
                         <div>
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                             {subject.code && <span className="subject-code-pill">{subject.code}</span>}
-                            <h3 style={{ margin: 0, fontSize: "1.4rem" }}>{language === "English" ? subject.name : subject.tamil}</h3>
+                            <h3 style={{ margin: 0, fontSize: "1.35rem" }}>{language === "English" ? subject.name : subject.tamil}</h3>
                           </div>
-                          <div style={{ color: "#a7f3d0", fontSize: "0.85rem", marginTop: "4px" }}>
-                            👨‍🏫 Faculty: <strong>{subject.assignedTeacher || "Unassigned"}</strong>
+                          <div style={{ display: "flex", gap: "14px", alignItems: "center", marginTop: "6px", flexWrap: "wrap" }}>
+                            <span style={{ color: "#a7f3d0", fontSize: "0.88rem" }}>
+                              👨‍🏫 Faculty: <strong>{subject.assignedTeacher || "Unassigned"}</strong>
+                            </span>
+                            <span style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                              📚 {pubCount} Study Material{pubCount === 1 ? "" : "s"}
+                            </span>
+                            <span style={{ fontSize: "0.82rem", color: "#38bdf8", fontWeight: 600 }}>
+                              📝 {assignCount} Assignment{assignCount === 1 ? "" : "s"}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -535,15 +477,6 @@ export default function StudentDashboard() {
                           📖 Open Subject Notes →
                         </button>
                       </div>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginTop: "14px" }}>
-                      {units.map((u, idx) => (
-                        <div key={idx} style={{ background: "rgba(255,255,255,0.04)", padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)" }}>
-                          <span style={{ fontSize: "0.8rem", color: "var(--accent-cyan)", display: "block" }}>Unit {idx + 1} Topic</span>
-                          <strong style={{ fontSize: "0.9rem" }}>{u}</strong>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 );
@@ -599,6 +532,8 @@ export default function StudentDashboard() {
           )}
         </div>
       </section>
+
+
 
       {/* FOOTER */}
       <footer className="footer">

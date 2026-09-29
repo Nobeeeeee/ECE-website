@@ -203,7 +203,6 @@ function AdminPage() {
       notes: 12,
       assignedTeacher: teacher,
       facultyPassword: pass,
-      units: ["Unit 1: Introduction", "Unit 2: Core Principles", "Unit 3: Applications"],
     };
 
     try {

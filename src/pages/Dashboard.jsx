@@ -296,33 +296,11 @@ function Dashboard() {
     }).length;
   };
 
-  // Track student's recently viewed subjects
-  const [recentlyViewedSubjects, setRecentlyViewedSubjects] = useState(() => {
-    try {
-      const saved = localStorage.getItem("studynotes_recently_viewed");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error("Failed to load recently viewed subjects from localStorage", e);
-      return [];
-    }
-  });
-
   const [selectedSubjectMode, setSelectedSubjectMode] = useState("all");
 
   const handleOpenSubject = (subject, mode = "all") => {
     setSelectedSubject(subject);
     setSelectedSubjectMode(mode);
-
-    setRecentlyViewedSubjects((prev) => {
-      const filtered = prev.filter((s) => s.id !== subject.id);
-      const updated = [subject, ...filtered].slice(0, 6);
-      try {
-        localStorage.setItem("studynotes_recently_viewed", JSON.stringify(updated));
-      } catch (e) {
-        console.error("Failed to save recently viewed subjects", e);
-      }
-      return updated;
-    });
   };
 
   // Derive study notes dynamically: for Faculty, show ONLY notes belonging to their assigned subject(s)
@@ -357,38 +335,6 @@ function Dashboard() {
     const filesCount = customFiles.filter((f) => f.subjectId === subjectId || f.subjectName.toLowerCase() === subjectName.toLowerCase()).length;
     return notesCount + filesCount;
   };
-
-  const displayRecentNotes = (() => {
-    if (!currentUser) {
-      return [];
-    }
-    if (isFaculty) {
-      const assignedIds = facultyAssignedSubjects.map((s) => s.id);
-      const assignedNames = facultyAssignedSubjects.map((s) => s.name.toLowerCase());
-
-      return customNotes
-        .filter((n) => assignedIds.includes(n.subjectId) || assignedNames.includes(n.subjectName.toLowerCase()))
-        .map((n) => {
-          const sub = subjects.find((s) => s.id === n.subjectId || s.name.toLowerCase() === n.subjectName.toLowerCase()) || facultyAssignedSubjects[0];
-          return {
-            ...n,
-            subjectObj: sub,
-            icon: sub?.icon || "📚",
-            subject: n.subjectName,
-          };
-        });
-    } else {
-      return customNotes.map((n) => {
-        const sub = subjects.find((s) => s.id === n.subjectId || s.name.toLowerCase() === n.subjectName.toLowerCase());
-        return {
-          ...n,
-          subjectObj: sub || subjects[0],
-          icon: sub?.icon || "📚",
-          subject: n.subjectName,
-        };
-      });
-    }
-  })();
 
   // Faculty Combined Create Notes & Upload Files Modal State
   const [createUploadTab, setCreateUploadTab] = useState("write"); // "write" or "upload"
@@ -615,7 +561,6 @@ function Dashboard() {
           <a href="#home">Home</a>
           <a href="#subjects">Subjects</a>
           {currentUser && <a href="#notes">Categories</a>}
-          {currentUser && <a href="#materials">Recent Notes</a>}
         </nav>
 
         <div className="dashboard-actions">
@@ -1004,48 +949,6 @@ function Dashboard() {
                         </button>
                       </div>
                     </div>
-
-                    {/* UNIT TOPICS QUICK PREVIEW LIST */}
-                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "14px", marginTop: "4px" }}>
-                      <span style={{ fontSize: "0.88rem", color: "#c084fc", fontWeight: 700, display: "block", marginBottom: "10px" }}>
-                        🎯 Course Units & Interactive Previews:
-                      </span>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "10px" }}>
-                        {units.map((u, i) => (
-                          <div
-                            key={i}
-                            style={{
-                              padding: "10px 14px",
-                              background: "rgba(255, 255, 255, 0.03)",
-                              border: "1px solid rgba(255, 255, 255, 0.08)",
-                              borderRadius: "12px",
-                              fontSize: "0.88rem",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <span style={{ color: "#e2e8f0" }}>📄 {u}</span>
-                            <button
-                              type="button"
-                              style={{
-                                background: "rgba(168,85,247,0.2)",
-                                border: "1px solid rgba(168,85,247,0.4)",
-                                color: "#e9d5ff",
-                                fontSize: "0.75rem",
-                                fontWeight: 700,
-                                padding: "4px 10px",
-                                borderRadius: "8px",
-                                cursor: "pointer",
-                              }}
-                              onClick={() => setSmartPreviewItem({ title: u, unit: `Unit ${i+1}`, name: subject.name, icon: subject.icon, units: subject.units })}
-                            >
-                              Preview
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   </div>
                 );
               }
@@ -1168,89 +1071,6 @@ function Dashboard() {
           )}
         </div>
       </section>
-
-      {/* RECENTLY VIEWED / FACULTY ASSIGNED NOTES SECTION */}
-      {currentUser && (
-        <section className="recent-section" id="materials">
-          <div className="section-heading">
-            <span>{isFaculty ? "FACULTY SUBJECT NOTES" : "RECENTLY VIEWED"}</span>
-            <h2>{isFaculty ? "Your Assigned Subject Notes" : "Your Recently Viewed Notes"}</h2>
-            <p>
-              {isFaculty
-                ? "Study materials and question banks for your assigned course."
-                : "Quick access to study materials from subjects you recently explored."}
-            </p>
-          </div>
-
-          {displayRecentNotes.length > 0 ? (
-            <div className="recent-grid">
-              {displayRecentNotes.map((note) => (
-                <div
-                  className="recent-card"
-                  key={note.id}
-                  onClick={() => handleOpenSubject(note.subjectObj)}
-                >
-                  <div className="recent-top">
-                    <div className="recent-icon">{note.icon}</div>
-                    <span className="note-type">{note.type}</span>
-                  </div>
-                  <h3>{note.title}</h3>
-                  <p>{note.subject}</p>
-                  <div className="note-footer">
-                    <span>{note.unit}</span>
-                    <button type="button">Explore Notes →</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "40px 24px",
-                background: "rgba(255, 255, 255, 0.02)",
-                border: "1px dashed rgba(139, 92, 246, 0.3)",
-                borderRadius: "20px",
-                maxWidth: "600px",
-                margin: "0 auto",
-              }}
-            >
-              <span style={{ fontSize: "2.8rem", display: "block", marginBottom: "12px" }}>
-                {!currentUser ? "🔒" : "📖"}
-              </span>
-              <h3 style={{ fontSize: "1.3rem", color: "#ffffff", marginBottom: "8px", fontFamily: "var(--font-heading)" }}>
-                {!currentUser
-                  ? "Faculty Notes Protected"
-                  : isFaculty
-                  ? "No Published Notes Found"
-                  : "No Published Notes Available Yet"}
-              </h3>
-              <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginBottom: "20px", lineHeight: 1.5 }}>
-                {!currentUser
-                  ? "Please sign in to access faculty-given study notes, 2-mark & 16-mark question banks, and course files. Only the website dashboard curriculum is visible when logged out."
-                  : isFaculty
-                  ? "You haven't published any notes for your assigned subject yet. Click 'Create Notes & Upload Files' above to publish your first note!"
-                  : "No study notes have been published by faculty yet. Touch any subject card above or check back later!"}
-              </p>
-              {!currentUser ? (
-                <button
-                  className="primary-btn"
-                  onClick={() => navigate("/login")}
-                >
-                  🔐 Sign In / Register to Access Notes
-                </button>
-              ) : !isFaculty && (
-                <button
-                  className="primary-btn"
-                  onClick={() => document.getElementById("subjects")?.scrollIntoView({ behavior: "smooth" })}
-                >
-                  ⚡ Explore Subjects Now
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-      )}
 
       {/* EXAM / FACULTY RESOURCE BANNER */}
       <section className="exam-section">

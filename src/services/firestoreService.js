@@ -225,6 +225,22 @@ export const subscribeSubmissions = (subjectId, callback) => {
   }
 };
 
+export const subscribeAllSubmissions = (callback) => {
+  try {
+    const q = collection(db, "submissions");
+    return onSnapshot(q, (snapshot) => {
+      const subs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(subs);
+    }, (error) => {
+      console.warn("Firestore all submissions subscription warning:", error.message);
+      callback([]);
+    });
+  } catch (err) {
+    console.warn("Firestore all submissions init error:", err.message);
+    return () => {};
+  }
+};
+
 export const submitStudentAssignmentToFirestore = async (submissionData, fileObj = null) => {
   try {
     let fileUrl = "";
@@ -239,13 +255,16 @@ export const submitStudentAssignmentToFirestore = async (submissionData, fileObj
       }
     }
 
-    const docRef = await addDoc(collection(db, "submissions"), {
+    const docId = submissionData.id || `submission_${Date.now()}`;
+    const subRef = doc(db, "submissions", docId);
+    await setDoc(subRef, {
       ...submissionData,
+      id: docId,
       fileUrl: fileUrl || submissionData.fileUrl || "",
-      submittedAt: new Date().toISOString(),
+      submittedAt: submissionData.submittedAt || new Date().toISOString(),
       status: submissionData.status || "Submitted",
-    });
-    return docRef.id;
+    }, { merge: true });
+    return docId;
   } catch (err) {
     console.error("Failed to submit assignment to Firestore:", err);
     throw err;
@@ -255,14 +274,33 @@ export const submitStudentAssignmentToFirestore = async (submissionData, fileObj
 export const gradeStudentSubmissionInFirestore = async (submissionId, gradeData) => {
   try {
     const subRef = doc(db, "submissions", submissionId);
-    await updateDoc(subRef, {
+    await setDoc(subRef, {
       marks: gradeData.marks,
       feedback: gradeData.feedback || "",
       status: "Graded",
       gradedAt: new Date().toISOString(),
-    });
+    }, { merge: true });
   } catch (err) {
     console.error("Failed to grade submission in Firestore:", err);
+    throw err;
+  }
+};
+
+export const saveManualStudentGradeToFirestore = async (submissionData) => {
+  try {
+    const docId = submissionData.id || `sub_manual_${Date.now()}`;
+    const subRef = doc(db, "submissions", docId);
+    await setDoc(subRef, {
+      ...submissionData,
+      id: docId,
+      status: "Graded",
+      isManual: true,
+      gradedAt: new Date().toISOString(),
+      submittedAt: submissionData.submittedAt || new Date().toISOString(),
+    }, { merge: true });
+    return docId;
+  } catch (err) {
+    console.error("Failed to save manual student grade to Firestore:", err);
     throw err;
   }
 };

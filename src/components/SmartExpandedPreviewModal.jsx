@@ -11,9 +11,10 @@ export default function SmartExpandedPreviewModal({
   onClose,
   onDownload,
   currentUser,
+  onOpenSubjectModal,
 }) {
-  const [activeTab, setActiveTab] = useState("reader"); // "reader", "doc", "summary", "units"
-  const [theme, setTheme] = useState("midnight"); // "midnight", "paper", "sepia"
+  const [activeTab, setActiveTab] = useState("reader"); // "reader", "doc"
+  const [theme, setTheme] = useState("midnight"); // "midnight"
   const [fontSize, setFontSize] = useState(16); // 14, 16, 18, 22
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -22,10 +23,14 @@ export default function SmartExpandedPreviewModal({
   const [zoomLevel, setZoomLevel] = useState(100);
 
   // Determine item properties safely
-  const title = item?.title || item?.name || item?.fileName || subject?.name || "Subject Study Note";
-  const unit = item?.unit || (subject?.units && subject.units[0]) || "Unit Note";
-  const icon = item?.icon || subject?.icon || "📖";
-  const fileType = item?.type || item?.fileType || "Document";
+  const targetSubject = subject || (item?.code || item?.assignedTeacher ? item : null);
+  const title = item?.title || item?.name || item?.fileName || targetSubject?.name || "Subject Study Note";
+  const courseCode = targetSubject?.code || item?.code || null;
+  const courseName = targetSubject?.name || item?.subjectName || (item?.code ? item?.name : null) || "ECE Department";
+  const facultyName = targetSubject?.assignedTeacher || item?.assignedTeacher || item?.teacher || null;
+  const unit = item?.unit || (item?.units && item.units[0]) || (targetSubject?.units && targetSubject.units[0]) || (item?.code ? "All Units" : "Unit Note");
+  const icon = item?.icon || targetSubject?.icon || "📖";
+  const fileType = item?.type || item?.fileType || (item?.code ? "Course Study Module" : "Document");
   const previewUrl = item?.previewUrl || item?.fileUrl || null;
   const noteContent = item?.content || item?.description || item?.text || "";
   const isQuestionBank = item?.type?.includes("2-mark") || item?.type?.includes("13-mark") || item?.type?.includes("Q&A") || item?.fileType?.includes("Question");
@@ -90,24 +95,6 @@ export default function SmartExpandedPreviewModal({
     window.print();
   };
 
-  // Generate Smart Key Takeaways (AI summary simulation)
-  const getSmartSummaryPoints = () => {
-    if (item?.qaList && item.qaList.length > 0) {
-      return item.qaList.slice(0, 4).map((q) => `Q: ${q.question} -> Key Concept: ${q.answer.substring(0, 100)}...`);
-    }
-
-    if (noteContent && noteContent.length > 30) {
-      const sentences = noteContent.split(/(?<=[.?!])\s+/).filter(Boolean);
-      return sentences.slice(0, 4);
-    }
-
-    return [
-      `Key Concept 1: Essential definitions, physical principles, and formulas for ${unit}.`,
-      `Key Concept 2: Standard derivations and numerical problem strategies for university examinations.`,
-      `Key Concept 3: Important 2-mark & 13-mark high-frequency questions for instant revision.`,
-      `Exam Tip: Review previous year question papers & diagrammatic representation for maximum marks.`,
-    ];
-  };
 
   // Render question answer list if present
   const renderQAList = () => {
@@ -143,12 +130,15 @@ export default function SmartExpandedPreviewModal({
           <div className="smart-preview-header-info">
             <div className="smart-preview-icon">{icon}</div>
             <div className="smart-preview-title-group">
-              <h2 className="smart-preview-title">{title}</h2>
-              <div className="smart-preview-badges">
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                {courseCode && <span className="smart-preview-pill purple">{courseCode}</span>}
+                <h2 className="smart-preview-title" style={{ margin: 0 }}>{title}</h2>
+              </div>
+              <div className="smart-preview-badges" style={{ marginTop: "6px" }}>
                 <span className="smart-preview-pill purple">⚡ {unit}</span>
-                <span className="smart-preview-pill cyan">📚 {subject?.name || "ECE Course"}</span>
-                {subject?.assignedTeacher && (
-                  <span className="smart-preview-pill emerald">👨‍🏫 {subject.assignedTeacher}</span>
+                <span className="smart-preview-pill cyan">📚 {courseName}</span>
+                {facultyName && facultyName !== "Unassigned" && (
+                  <span className="smart-preview-pill emerald">👨‍🏫 {facultyName}</span>
                 )}
               </div>
             </div>
@@ -214,22 +204,6 @@ export default function SmartExpandedPreviewModal({
               >
                 🌙
               </button>
-              <button
-                className={`smart-tool-btn ${theme === "paper" ? "active" : ""}`}
-                style={{ padding: "6px 10px" }}
-                onClick={() => setTheme("paper")}
-                title="Paper Light Mode"
-              >
-                ☀️
-              </button>
-              <button
-                className={`smart-tool-btn ${theme === "sepia" ? "active" : ""}`}
-                style={{ padding: "6px 10px" }}
-                onClick={() => setTheme("sepia")}
-                title="Eye Care Sepia Mode"
-              >
-                📜
-              </button>
             </div>
           </div>
 
@@ -266,7 +240,7 @@ export default function SmartExpandedPreviewModal({
           </div>
         </div>
 
-        {/* MODE TABS */}
+        {/* MODE TABS - Always available */}
         <div className="smart-preview-tabs">
           <button
             className={`smart-tab-btn ${activeTab === "reader" ? "active" : ""}`}
@@ -283,20 +257,6 @@ export default function SmartExpandedPreviewModal({
               📄 Original File View
             </button>
           )}
-
-          <button
-            className={`smart-tab-btn ${activeTab === "summary" ? "active" : ""}`}
-            onClick={() => setActiveTab("summary")}
-          >
-            ⚡ AI Key Takeaways
-          </button>
-
-          <button
-            className={`smart-tab-btn ${activeTab === "units" ? "active" : ""}`}
-            onClick={() => setActiveTab("units")}
-          >
-            🎯 Course Units & Topics
-          </button>
         </div>
 
         {/* BODY CONTENT */}
@@ -308,7 +268,7 @@ export default function SmartExpandedPreviewModal({
                 <div>
                   <h3 style={{ margin: "0 0 4px 0", fontSize: "1.1rem" }}>{title}</h3>
                   <span style={{ fontSize: "0.85rem", opacity: 0.8 }}>
-                    {subject?.name} • {unit} • {fileType}
+                    {courseName} • {unit} • {fileType}
                   </span>
                 </div>
                 {item?.uploadedAt && (
@@ -321,28 +281,126 @@ export default function SmartExpandedPreviewModal({
               {renderQAList()}
 
               {noteContent && (
-                <div style={{ whiteSpace: "pre-line", margin: "20px 0" }}>
+                <div style={{ whiteSpace: "pre-line", margin: "20px 0", lineHeight: 1.7 }}>
                   <h4 style={{ color: "#a855f7", marginBottom: "8px" }}>📝 Note Content Overview:</h4>
                   {noteContent}
                 </div>
               )}
 
+              {/* Course Hub / Overview when item is a Subject or has no direct body text */}
               {!noteContent && !item?.qaList && (
-                <div style={{ textAlign: "center", padding: "40px 20px" }}>
-                  <span style={{ fontSize: "3rem" }}>📄</span>
-                  <h3 style={{ margin: "16px 0 8px 0" }}>Document Ready For Reading</h3>
-                  <p style={{ opacity: 0.8, maxWidth: "500px", margin: "0 auto 20px" }}>
-                    You can switch to <b>Original File View</b> to view the full PDF/Image or click <b>Download</b> to save it locally.
-                  </p>
-                  {previewUrl && (
+                <div style={{ padding: "16px 0" }}>
+                  <div
+                    style={{
+                      background: "rgba(255, 255, 255, 0.03)",
+                      border: "1px solid rgba(168, 85, 247, 0.25)",
+                      borderRadius: "16px",
+                      padding: "24px",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "16px" }}>
+                      <span style={{ fontSize: "2.8rem" }}>{icon}</span>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "1.4rem", color: "#ffffff" }}>{title}</h3>
+                        <p style={{ margin: "4px 0 0 0", color: "#94a3b8", fontSize: "0.9rem" }}>
+                          {courseCode ? `${courseCode} • ` : ""}Anna University Department of Electronics & Communication Engineering
+                        </p>
+                      </div>
+                    </div>
+
+                    <p style={{ color: "#cbd5e1", lineHeight: 1.6, margin: "0 0 16px 0", fontSize: "0.95rem" }}>
+                      Welcome to the reader view for <strong>{title}</strong>. Access comprehensive study materials, unit lecture notes, solved 2-mark & 16-mark university question banks, and lab resources.
+                    </p>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginTop: "16px" }}>
+                      <div style={{ background: "rgba(168, 85, 247, 0.08)", border: "1px solid rgba(168, 85, 247, 0.2)", borderRadius: "12px", padding: "14px" }}>
+                        <span style={{ fontSize: "0.8rem", color: "#c084fc", fontWeight: 700, display: "block" }}>Faculty In-Charge</span>
+                        <strong style={{ fontSize: "1rem", color: "#ffffff" }}>{facultyName || "ECE Department Faculty"}</strong>
+                      </div>
+                      <div style={{ background: "rgba(6, 182, 212, 0.08)", border: "1px solid rgba(6, 182, 212, 0.2)", borderRadius: "12px", padding: "14px" }}>
+                        <span style={{ fontSize: "0.8rem", color: "#67e8f9", fontWeight: 700, display: "block" }}>Course Curriculum</span>
+                        <strong style={{ fontSize: "1rem", color: "#ffffff" }}>Anna University Regulation</strong>
+                      </div>
+                      <div style={{ background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "12px", padding: "14px" }}>
+                        <span style={{ fontSize: "0.8rem", color: "#6ee7b7", fontWeight: 700, display: "block" }}>Status</span>
+                        <strong style={{ fontSize: "1rem", color: "#ffffff" }}>✅ Enrolled & Active</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Action Launchers */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
                     <button
-                      className="smart-tool-btn active"
-                      style={{ padding: "10px 20px" }}
-                      onClick={() => setActiveTab("doc")}
+                      className="category-btn"
+                      style={{
+                        padding: "16px",
+                        textAlign: "left",
+                        background: "rgba(168, 85, 247, 0.15)",
+                        border: "1px solid rgba(168, 85, 247, 0.3)",
+                        borderRadius: "14px",
+                        cursor: "pointer",
+                        color: "#ffffff",
+                      }}
+                      onClick={() => onOpenSubjectModal?.(item || targetSubject, "all")}
                     >
-                      👁️ Switch to Full PDF / Image Preview
+                      <div style={{ fontSize: "1.2rem", marginBottom: "4px" }}>📖 Lecture Notes</div>
+                      <div style={{ fontSize: "0.82rem", color: "#c084fc" }}>Open Unit Study Materials →</div>
                     </button>
-                  )}
+
+                    <button
+                      className="category-btn"
+                      style={{
+                        padding: "16px",
+                        textAlign: "left",
+                        background: "rgba(6, 182, 212, 0.15)",
+                        border: "1px solid rgba(6, 182, 212, 0.3)",
+                        borderRadius: "14px",
+                        cursor: "pointer",
+                        color: "#ffffff",
+                      }}
+                      onClick={() => onOpenSubjectModal?.(item || targetSubject, "qbank")}
+                    >
+                      <div style={{ fontSize: "1.2rem", marginBottom: "4px" }}>❓ Question Bank</div>
+                      <div style={{ fontSize: "0.82rem", color: "#67e8f9" }}>View 2-Mark & 16-Mark Q&As →</div>
+                    </button>
+
+                    <button
+                      className="category-btn"
+                      style={{
+                        padding: "16px",
+                        textAlign: "left",
+                        background: "rgba(245, 158, 11, 0.15)",
+                        border: "1px solid rgba(245, 158, 11, 0.3)",
+                        borderRadius: "14px",
+                        cursor: "pointer",
+                        color: "#ffffff",
+                      }}
+                      onClick={() => onOpenSubjectModal?.(item || targetSubject, "assignments")}
+                    >
+                      <div style={{ fontSize: "1.2rem", marginBottom: "4px" }}>📝 Unit Assignments</div>
+                      <div style={{ fontSize: "0.82rem", color: "#fcd34d" }}>Check Tasks & Submit Work →</div>
+                    </button>
+
+                    {previewUrl && (
+                      <button
+                        className="category-btn"
+                        style={{
+                          padding: "16px",
+                          textAlign: "left",
+                          background: "rgba(59, 130, 246, 0.15)",
+                          border: "1px solid rgba(59, 130, 246, 0.3)",
+                          borderRadius: "14px",
+                          cursor: "pointer",
+                          color: "#ffffff",
+                        }}
+                        onClick={() => setActiveTab("doc")}
+                      >
+                        <div style={{ fontSize: "1.2rem", marginBottom: "4px" }}>👁️ Original File</div>
+                        <div style={{ fontSize: "0.82rem", color: "#93c5fd" }}>Switch to Document Viewer →</div>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -375,40 +433,7 @@ export default function SmartExpandedPreviewModal({
             </div>
           )}
 
-          {/* TAB 3: AI KEY TAKEAWAYS */}
-          {activeTab === "summary" && (
-            <div className="smart-reader-wrapper">
-              <div className="smart-ai-summary-box">
-                <div className="smart-ai-summary-title">
-                  <span>⚡</span>
-                  <span>AI Smart Key Takeaways & Exam Highlights</span>
-                </div>
-                <div className="smart-ai-points-list">
-                  {getSmartSummaryPoints().map((pt, idx) => (
-                    <div key={idx} className="smart-ai-point">
-                      <span className="smart-ai-bullet">{idx + 1}</span>
-                      <span>{pt}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* TAB 4: COURSE UNITS & TOPICS */}
-          {activeTab === "units" && (
-            <div className="smart-reader-wrapper">
-              <h3 className="smart-reader-heading">🎯 Syllabus & Unit Breakdown</h3>
-              <div className="smart-units-grid">
-                {(subject?.units || ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"]).map((u, i) => (
-                  <div key={i} className="smart-unit-card">
-                    <h4 style={{ color: "#c084fc", margin: "0 0 6px 0" }}>Unit {i + 1}</h4>
-                    <p style={{ margin: 0, fontSize: "0.9rem" }}>{u}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

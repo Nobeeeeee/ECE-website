@@ -969,12 +969,14 @@ export default function SubjectNotesModal({
                   <p style={{ color: "var(--text-secondary)", fontSize: "0.88rem", margin: 0 }}>
                     {currentUser?.role === "faculty" || currentUser?.role === "admin"
                       ? `Create unit assignments, view student PDF uploads, and grade submissions for ${subject.name}.`
-                      : `View homework tasks, upload & submit assignment PDFs for ${subject.name}, and track your grades & feedback.`}
+                      : subjectAssignments.length > 0
+                      ? `View homework tasks, upload & submit assignment PDFs for ${subject.name}, and track your grades & feedback.`
+                      : `No assignments have been assigned by faculty for ${subject.name} yet.`}
                   </p>
                 </div>
 
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                  {currentUser?.role !== "faculty" && (
+                  {currentUser?.role !== "faculty" && subjectAssignments.length > 0 && (
                     <button
                       type="button"
                       className="sub-btn-batch-download"
@@ -999,7 +1001,7 @@ export default function SubjectNotesModal({
               </div>
 
               {/* STUDENT QUICK DIRECT UNIT UPLOAD BOX */}
-              {showDirectUploadBox && currentUser?.role !== "faculty" && (
+              {showDirectUploadBox && currentUser?.role !== "faculty" && subjectAssignments.length > 0 && (
                 <div
                   style={{
                     marginBottom: "20px",
@@ -1072,8 +1074,32 @@ export default function SubjectNotesModal({
               )}
 
               {/* ASSIGNMENT CARDS LIST */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                {subjectAssignments.map((assign) => {
+              {subjectAssignments.length === 0 ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "50px 24px",
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px dashed rgba(56, 189, 248, 0.3)",
+                    borderRadius: "20px",
+                    margin: "10px 0",
+                  }}
+                >
+                  <span style={{ fontSize: "3rem", display: "block", marginBottom: "14px" }}>
+                    📭
+                  </span>
+                  <h3 style={{ fontSize: "1.3rem", color: "#ffffff", marginBottom: "8px", fontFamily: "var(--font-heading)" }}>
+                    No Assignments Given Yet
+                  </h3>
+                  <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", maxWidth: "480px", margin: "0 auto", lineHeight: 1.5 }}>
+                    {currentUser?.role === "faculty" || currentUser?.role === "admin"
+                      ? `You haven't posted any assignments for ${subject.name} yet. Click 'Create New Assignment' above to post the first assignment for your students.`
+                      : `Assigned faculty (${subject.assignedTeacher || "Faculty In-Charge"}) has not given any assignments for ${subject.name} yet. Once an assignment is given by faculty, you will be able to submit your work here.`}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                  {subjectAssignments.map((assign) => {
                   const assignSubmissions = customSubmissionsState.filter((s) => s.assignmentId === assign.id);
                   const studentSub = customSubmissionsState.find(
                     (s) => s.assignmentId === assign.id && (s.studentName === currentUser?.name || currentUser?.role !== "faculty")
@@ -1338,7 +1364,8 @@ export default function SubjectNotesModal({
                     </div>
                   );
                 })}
-              </div>
+                </div>
+              )}
             </div>
           ) : allNotes.length === 0 && customFiles.length === 0 ? (
             <div
@@ -1914,9 +1941,11 @@ export default function SubjectNotesModal({
                     <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "0.85rem", marginBottom: "6px" }}>
                       Unit / Module *
                     </label>
-                    <select
+                    <input
+                      type="text"
                       value={editingNote.unit}
                       onChange={(e) => setEditingNote({ ...editingNote, unit: e.target.value })}
+                      placeholder="e.g. Unit 1"
                       style={{
                         width: "100%",
                         padding: "10px 14px",
@@ -1925,13 +1954,8 @@ export default function SubjectNotesModal({
                         borderRadius: "10px",
                         color: "#ffffff",
                       }}
-                    >
-                      <option value="Unit 1">Unit 1</option>
-                      <option value="Unit 2">Unit 2</option>
-                      <option value="Unit 3">Unit 3</option>
-                      <option value="Unit 4">Unit 4</option>
-                      <option value="Unit 5">Unit 5</option>
-                    </select>
+                      required
+                    />
                   </div>
 
                   <div>
@@ -2074,9 +2098,11 @@ export default function SubjectNotesModal({
                     <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "0.85rem", marginBottom: "6px" }}>
                       Unit / Module *
                     </label>
-                    <select
+                    <input
+                      type="text"
                       value={editingFile.unit}
                       onChange={(e) => setEditingFile({ ...editingFile, unit: e.target.value })}
+                      placeholder="e.g. Unit 1"
                       style={{
                         width: "100%",
                         padding: "10px 14px",
@@ -2085,13 +2111,8 @@ export default function SubjectNotesModal({
                         borderRadius: "10px",
                         color: "#ffffff",
                       }}
-                    >
-                      <option value="Unit 1">Unit 1</option>
-                      <option value="Unit 2">Unit 2</option>
-                      <option value="Unit 3">Unit 3</option>
-                      <option value="Unit 4">Unit 4</option>
-                      <option value="Unit 5">Unit 5</option>
-                    </select>
+                      required
+                    />
                   </div>
 
                   <div>
@@ -2194,18 +2215,14 @@ export default function SubjectNotesModal({
                     <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "0.82rem", marginBottom: "4px" }}>
                       Unit / Chapter *
                     </label>
-                    <select
+                    <input
+                      type="text"
                       value={modalNoteUnit}
                       onChange={(e) => setModalNoteUnit(e.target.value)}
+                      placeholder="e.g. Unit 1"
                       style={{ width: "100%", padding: "9px 12px", background: "rgba(255, 255, 255, 0.05)", border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "8px", color: "#ffffff" }}
-                    >
-                      <option value="Unit 1">Unit 1</option>
-                      <option value="Unit 2">Unit 2</option>
-                      <option value="Unit 3">Unit 3</option>
-                      <option value="Unit 4">Unit 4</option>
-                      <option value="Unit 5">Unit 5</option>
-                      <option value="Lab Manual">Lab Manual</option>
-                    </select>
+                      required
+                    />
                   </div>
 
                   <div>
@@ -2220,7 +2237,6 @@ export default function SubjectNotesModal({
                       <option value="Lecture Notes">📘 Lecture Notes</option>
                       <option value="2-Mark Q&A">❓ 2-Mark Short Q&A</option>
                       <option value="16-Mark Problem">📄 16-Mark Exam Solutions</option>
-                      <option value="Formula Summary">📑 Formula Sheet</option>
                       <option value="PDF Document">📂 PDF Document</option>
                     </select>
                   </div>
